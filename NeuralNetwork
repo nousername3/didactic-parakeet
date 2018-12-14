@@ -1,0 +1,146 @@
+#include <iostream>
+#include <cmath>
+#include <vector>
+
+const double E = 0.7; // learning speed
+const double A = 0.3; // moment
+
+using namespace std;
+
+double sigmoid(double x)
+{
+    return 1/(1 + pow(2.7,-x));
+}
+double derSigm(double x)
+{
+    return sigmoid(x)*(1-sigmoid(x));
+}
+
+class synapse
+{
+public:
+    double weight;
+    double grad;
+    double deltaW;
+    double prevDeltaW = 0;
+
+    synapse(double weight)
+    {
+        this->weight = weight;
+    }
+
+    void countDeltaW(double deltaB, double outA)
+    {
+        grad = deltaB*outA;
+        deltaW = E*grad + A*prevDeltaW;
+        prevDeltaW = deltaW;
+        weight += deltaW;
+    }
+};
+
+class neuron
+{
+public:
+    vector<synapse> oSynapse; // Исходящие из одного нейрона синапсы
+    double input = 0;
+    double output = 1;
+    double delta;
+
+    neuron(int size)
+    {
+        double randWeight = (rand() % 2000) - 1000;
+        randWeight = randWeight/1000;
+        oSynapse.resize(size, randWeight);
+    }
+    void transferRes(vector<neuron> &nextLayer)
+    {
+        output = sigmoid(this->input);
+        for (unsigned int i = 0; i < oSynapse.size(); i++){
+            nextLayer[i].input += output*oSynapse[i].weight;
+        }
+    }
+    void lastLayerRes()
+    {
+        output = sigmoid(this->input);
+    }
+    double countDelta(double expected) // для последнего слоя
+    {
+        this->delta = (expected - output)*derSigm(input);
+        return this->delta;
+    }
+    double countDelta(vector<neuron> &nextLayer)
+    {
+        double sum = 0;
+        for (unsigned int i = 0; i < oSynapse.size(); i++){
+            sum += oSynapse[i].weight*nextLayer[i].delta;
+        }
+        delta = derSigm(input)*sum;
+
+        for (unsigned int i = 0; i < oSynapse.size(); i++){
+            oSynapse[i].countDeltaW(nextLayer[i].delta, this->output);
+        }
+
+        return delta;
+    }
+};
+
+void countResult(vector<vector<neuron> > &net)
+{
+    for (unsigned int x = 0; x < (net.size()-1); x++){
+        for (unsigned int y = 0; y < net[x].size(); y++){
+            net[x][y].transferRes(net[x+1]);
+        }
+    }
+    for (unsigned int i = 0; i < net.back().size(); i++){
+        net.back()[i].lastLayerRes();
+    }
+}
+void updateNet(vector<vector<neuron> > &net) // обновляет input и output во всех нейронах
+{
+    for (unsigned int x = 0; x < net.size(); x++){
+        for(unsigned int y = 0; y < net[x].size(); y++){
+            net[x][y].input = 0;
+            net[x][y].output = 0;
+        }
+    }
+}
+
+void train(int input1, int input2, double expected, vector<vector<neuron> > &net)
+{
+    net[0][0].input = input1;
+    net[0][1].input = input2;
+    countResult(net);
+
+    net.back()[0].countDelta(expected);
+    for (int x = net.size() - 2; x >= 0; x--){
+        for (unsigned int y = 0; y < net[x].size(); y++){
+            net[x][y].countDelta(net[x+1]);
+        }
+    }
+
+    updateNet(net);
+}
+
+int main()
+{
+    vector<vector<neuron> > net(3);
+    net[0].resize(2, 3); // второй параметр - количество синапсов от нейрона == нейронов в след. слое
+    net[1].resize(3, 1);
+    net[2].resize(1, 0);
+
+    for (int i = 0; i < 1000; i++){
+        train(0.9, 0.9, 0.1, net);
+        train(0.9, 0.1, 0.9, net);
+        train(0.1, 0.9, 0.9, net);
+        train(0.1, 0.1, 0.1, net);
+    }
+
+
+    net[0][0].input = 0.1;
+    net[0][1].input = 0.9;
+    countResult(net);
+    cout << net[2][0].output;
+
+
+    return 0;
+}
